@@ -434,6 +434,13 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     if (_parms._plug_values == null && _parms.missingValuesHandling() == MissingValuesHandling.PlugValues) {
       error("_missing_values_handling", "No plug values frame provided for Missing Values Handling = PlugValues.");
     }
+    if (_parms._HGLM) {
+      for (int randInx:_parms._random_columns) {
+        if (!_parms.train().vec(randInx).isCategorical()) {
+          error("HGLM random_columns", "Must contain categorical columns.");
+        }
+      }
+    }
     if (expensive) {
       if (error_count() > 0) return;
       if (_parms._alpha == null)

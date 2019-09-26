@@ -193,18 +193,24 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
     // public int _response; // TODO: the standard is now _response_column in SupervisedModel.SupervisedParameters
     public boolean _standardize = true;
     public Family _family;
-    public Link _link = Link.family_default;
+    public Family[] _rand_family;   // for HGLM
+    public Link _link;
+    public Link[] _rand_link;       // for HGLM
     public Solver _solver = Solver.AUTO;
     public double _tweedie_variance_power;
     public double _tweedie_link_power;
     public double _theta; // 1/k and is used by negative binomial distribution only
     public double _invTheta;
-    public double [] _alpha = null;
-    public double [] _lambda = null;
+    public double [] _alpha;
+    public double [] _lambda;
+    public double[] _startval;  // for HGLM, initialize fixed and random coefficients (init_u), init_sig_u, init_sig_e
+    public boolean _calc_like;
+    public int[] _random_columns;
     // Has to be Serializable for backwards compatibility (used to be DeepLearningModel.MissingValuesHandling)
     public Serializable _missing_values_handling = MissingValuesHandling.MeanImputation;
     public double _prior = -1;
     public boolean _lambda_search = false;
+    public boolean _HGLM = false; // true to enable HGLM
     public int _nlambdas = -1;
     public boolean _non_negative = false;
     public boolean _exactLambdas = false;
@@ -291,7 +297,7 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
         glm.hide("_nlambdas", "only applies if lambda search is on.");
         glm.hide("_early_stopping","only applies if lambda search is on.");
       }
-      if (_family == Family.ordinal) {
+      if (_family.equals(Family.ordinal)) {
         if (_intercept == false)
           glm.error("Ordinal regression", "must have intercepts.  set _intercept to true.");
         if (!(_solver.equals(Solver.AUTO) || _solver.equals(Solver.GRADIENT_DESCENT_SQERR) || _solver.equals(Solver.GRADIENT_DESCENT_LH)))
@@ -299,6 +305,32 @@ public class GLMModel extends Model<GLMModel,GLMModel.GLMParameters,GLMModel.GLM
                   "Do not set Solver or set Solver to auto, GRADIENT_DESCENT_LH or GRADIENT_DESCENT_SQERR.");
         if (_lambda_search)
           glm.error("ordinal regression", "Ordinal regression do not support lambda search.");
+      }
+      if (_HGLM) {  // check correct parameter settings for HGLM
+        if (_random_columns==null)
+          throw new IllegalArgumentException("Need to specify the random component columns for HGLM.");
+        if (!(_random_columns.length == 1))
+          throw new IllegalArgumentException("HGLM only supports ONE random component for now.");
+        if (!(_rand_family==null) && !(_rand_family.length==_random_columns.length))
+          throw new IllegalArgumentException("HGLM _rand_family: must have the same length as random_columns.");
+        if (!(_rand_link==null) && !(_rand_link.length==_random_columns.length))
+          throw new IllegalArgumentException("HGLM _rand_link: must have the same length as random_columns.");   
+        if (!_family.equals(Family.gaussian))
+          throw new IllegalArgumentException("HGLM only supports Gaussian distributions for now.");
+        if (!(_rand_family==null)) {
+          for (Family fam : _rand_family) {
+            if (!fam.equals(Family.gaussian))
+              throw new IllegalArgumentException("HGLM only supports Gaussian distributions for now.");
+          }
+        }
+        if (!(_rand_link==null)) {
+          for (Link lin : _rand_link) {
+            if (!lin.equals(Link.identity) && !lin.equals(Link.family_default))
+            throw new IllegalArgumentException("HGLM only supports identity link functions for now.");
+          }
+        }
+        if (!(_link.equals(Link.family_default)) && !(_link.equals(Link.identity)))
+          throw new IllegalArgumentException("HGLM only supports identity link functions for now.");
       }
       if(_link != Link.family_default) { // check we have compatible link
         switch (_family) {
