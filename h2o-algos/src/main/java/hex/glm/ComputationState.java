@@ -39,6 +39,11 @@ public final class ComputationState {
   private DataInfo _activeData;
   private BetaConstraint _activeBC = null;
   private double[] _beta; // vector of coefficients corresponding to active data
+  private double[] _ubeta;  // HGLM, store coefficients of random effects;
+  private double[] _psi; // HGLM, psi
+  private double[] _phi; // HGLM
+  private double _tau; // HGLM for ei
+  private double _correction_HL; // HGLM
   final DataInfo _dinfo;
   private GLMGradientSolver _gslvr;
   private final Job _job;
@@ -537,6 +542,24 @@ public final class ComputationState {
     _ginfo = ginfo;
     _likelihood = ginfo._likelihood;
     return (_relImprovement = (objOld - objective())/Math.abs(objOld));
+  }
+
+  protected void setHGLMComputationState(double [] beta, double[] ubeta, double[] psi, double[] phi, 
+                                         double hlcorrection, double tau){
+    copyArray(beta, _beta);
+    copyArray(ubeta, _ubeta);
+    copyArray(psi, _psi);
+    copyArray(phi, _phi);
+    _correction_HL = hlcorrection;
+    _tau = tau;
+  }
+  
+  private double[] copyArray(double[] source, double[] dest) {
+    if (dest==null)
+      dest = source.clone();
+    else 
+      System.arraycopy(source, 0, dest, 0, dest.length);
+    return dest;
   }
 
   public double [] expandBeta(double [] beta) {

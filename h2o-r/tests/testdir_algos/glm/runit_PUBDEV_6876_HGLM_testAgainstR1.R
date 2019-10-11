@@ -14,6 +14,7 @@ test.HGLMData1 <- function() {
   yresp <- "y"
   xlist <- c("x1", "x3", "x5", "x6")
   z <- c(1)
+#  startval = c(1:23)
  # z<-c("Device")
   m11H2O <- h2o.glm(x=xlist, y=yresp, family="gaussian", rand_family = c("gaussian"), rand_link=c("identity"), 
                     training_frame=h2odata, HGLM=TRUE, random_columns=z)

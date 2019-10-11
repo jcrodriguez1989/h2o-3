@@ -17,7 +17,6 @@ import water.fvec.Frame;
 import water.fvec.Vec;
 import water.udf.CFuncRef;
 import water.util.*;
-import water.util.ArrayUtils;
 
 import java.io.Serializable;
 import java.util.Arrays;

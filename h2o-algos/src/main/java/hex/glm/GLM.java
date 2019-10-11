@@ -52,6 +52,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
   static NumberFormat devFormatter = new DecimalFormat(".##");
 
   public static final int SCORING_INTERVAL_MSEC = 15000; // scoreAndUpdateModel every minute unless score every iteration is set
+  public int[] _randC;  // contains categorical column levels for random columns for HGLM
   public String _generatedWeights = null;
   public GLM(boolean startup_once){super(new GLMParameters(),startup_once);}
   public GLM(GLMModel.GLMParameters parms) {
@@ -538,37 +539,81 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       if(_weights != null) vecs.add(_weights);
       if(_offset != null) vecs.add(_offset);
       vecs.add(_response);
-      double [] beta = getNullBeta();
-      GLMGradientInfo ginfo = new GLMGradientSolver(_job,_parms, _dinfo, 0, _state.activeBC()).getGradient(beta);
-      _lmax = lmax(ginfo._gradient);
-      _state.setLambdaMax(_lmax);
-      if (_parms._lambda_min_ratio == -1) {
-        _parms._lambda_min_ratio = (_nobs >> 4) > _dinfo.fullN() ? 1e-4 : 1e-2;
-        if(_parms._alpha[0] == 0)
-          _parms._lambda_min_ratio *= 1e-2; // smalelr lambda min for ridge as we are starting quite high
-      }
-
-      _state.updateState(beta,ginfo);
-      if (_parms._lambda == null) {  // no lambda given, we will base lambda as a fraction of lambda max
-        if (_parms._lambda_search) {
-          _parms._lambda = new double[_parms._nlambdas];
-          double dec = Math.pow(_parms._lambda_min_ratio, 1.0/(_parms._nlambdas - 1));
-          _parms._lambda[0] = _lmax;
-          double l = _lmax;
-          for (int i = 1; i < _parms._nlambdas; ++i)
-            _parms._lambda[i] = (l *= dec);
-          // todo set the null submodel
-        } else
-          _parms._lambda = new double[]{10 * _parms._lambda_min_ratio * _lmax};
-      }
-      if(!Double.isNaN(_lambdaCVEstimate)){
-        for(int i = 0; i < _parms._lambda.length; ++i)
-          if(_parms._lambda[i] < _lambdaCVEstimate){
-            _parms._lambda = Arrays.copyOf(_parms._lambda,i+1);
-            break;
+      double[] beta = getNullBeta();
+      if (_parms._HGLM) {
+        // set _randC
+        _randC = new int[_parms._random_columns.length];
+        for (int rcInd = 0; rcInd < _parms._random_columns.length; rcInd++) 
+          _randC[rcInd] = _parms.train().vec(_parms._random_columns[rcInd]).cardinality();
+        // initialize beta
+        int fixedEffectSize = beta.length;
+        int randomEffectSize = ArrayUtils.sum(_randC);
+        double tau=0; // store estimate of sig_e
+        double[] phi = new double[randomEffectSize];
+        double[] psi = new double[randomEffectSize];
+        double[] ubeta = new double[randomEffectSize];
+        double hlcorrection = 0;  // probably set by distribution
+        if (_parms._startval==null) {
+          GLMModel tempModel = runGLMModel(_parms, Family.gaussian);
+          System.out.println("Whack");
+        } else {
+          int off = 0;  // offset into startval
+          int lengthLimit = fixedEffectSize;
+          int totalstartvallen = fixedEffectSize+randomEffectSize+_randC.length+1;
+          assert _parms._startval.length==totalstartvallen:"Expected startval length: "+totalstartvallen+", Actual" +
+                  " startval length: "+_parms._startval.length; // ensure startval contains enough initialization param
+          for (int fixedInd=off; fixedInd < lengthLimit; fixedInd++) {
+            beta[fixedInd] = _parms._startval[fixedInd];
           }
-        _parms._lambda[_parms._lambda.length-1] = _lambdaCVEstimate;
+          off += fixedEffectSize;
+          lengthLimit += randomEffectSize;
+          for (int randomInd = off; randomInd < lengthLimit; randomInd++) {
+            ubeta[randomInd-off] = _parms._startval[randomInd];
+          }
+          off += randomEffectSize;
+          lengthLimit += _randC.length;
+          int sig_u_off = 0;
+          for (int siguInd=off; siguInd < lengthLimit; siguInd++) {
+            double init_sig_u = _parms._startval[siguInd];
+            for (int index=0; index < _randC[siguInd-off]; index++)
+              phi[index+sig_u_off] = init_sig_u;
+            sig_u_off += _randC[siguInd-off];
+          }
+          tau = _parms._startval[lengthLimit];
+        }
+        _state.setHGLMComputationState(beta, ubeta, psi, phi, hlcorrection, tau);
+      } else {
+        GLMGradientInfo ginfo = new GLMGradientSolver(_job, _parms, _dinfo, 0, _state.activeBC()).getGradient(beta);
+        _lmax = lmax(ginfo._gradient);
+        _state.setLambdaMax(_lmax);
+        if (_parms._lambda_min_ratio == -1) {
+          _parms._lambda_min_ratio = (_nobs >> 4) > _dinfo.fullN() ? 1e-4 : 1e-2;
+          if (_parms._alpha[0] == 0)
+            _parms._lambda_min_ratio *= 1e-2; // smalelr lambda min for ridge as we are starting quite high
+        }
+        _state.updateState(beta, ginfo);
+        if (_parms._lambda == null) {  // no lambda given, we will base lambda as a fraction of lambda max
+          if (_parms._lambda_search) {
+            _parms._lambda = new double[_parms._nlambdas];
+            double dec = Math.pow(_parms._lambda_min_ratio, 1.0 / (_parms._nlambdas - 1));
+            _parms._lambda[0] = _lmax;
+            double l = _lmax;
+            for (int i = 1; i < _parms._nlambdas; ++i)
+              _parms._lambda[i] = (l *= dec);
+            // todo set the null submodel
+          } else
+            _parms._lambda = new double[]{10 * _parms._lambda_min_ratio * _lmax};
+        }
+        if (!Double.isNaN(_lambdaCVEstimate)) {
+          for (int i = 0; i < _parms._lambda.length; ++i)
+            if (_parms._lambda[i] < _lambdaCVEstimate) {
+              _parms._lambda = Arrays.copyOf(_parms._lambda, i + 1);
+              break;
+            }
+          _parms._lambda[_parms._lambda.length - 1] = _lambdaCVEstimate;
+        }
       }
+      
       if(_parms._objective_epsilon == -1) {
         if(_parms._lambda_search)
           _parms._objective_epsilon = 1e-4;
@@ -581,6 +626,17 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       }
       buildModel();
     }
+  }
+  
+  private GLMModel runGLMModel(GLMParameters params, Family family) {
+    GLMParameters tempParams = new GLMParameters();
+    tempParams._train = params._train;
+    tempParams._family = family;
+    tempParams._lambda = new double[]{0};
+    tempParams._standardize = params._standardize;
+    tempParams._response_column = params._response_column;
+    GLMModel model = new GLM(tempParams).trainModel().get();
+    return model;
   }
 
   // FIXME: contrary to other models, GLM output duration includes computation of CV models:
