@@ -555,7 +555,15 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         double hlcorrection = 0;  // probably set by distribution
         if (_parms._startval==null) {
           GLMModel tempModel = runGLMModel(_parms, Family.gaussian);
-          System.out.println("Whack");
+          ModelMetrics mm = tempModel._output._training_metrics;
+
+          hex.ModelMetricsRegressionGLM tMetric =  (hex.ModelMetricsRegressionGLM) tempModel._output._training_metrics;
+          double init_sig_e = 0.6*tMetric.residual_deviance()/tMetric.residual_degrees_of_freedom();
+          double init_sig_u = init_sig_e*0.66;
+          init_sig_e = restrictMag(init_sig_e);
+          init_sig_u = restrictMag(init_sig_u);
+          Arrays.fill(phi, init_sig_u/_randC.length);
+          tau = init_sig_e;
         } else {
           int off = 0;  // offset into startval
           int lengthLimit = fixedEffectSize;
@@ -580,8 +588,12 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
             sig_u_off += _randC[siguInd-off];
           }
           tau = _parms._startval[lengthLimit];
+          if (tau < 0.0001 || ArrayUtils.minValue(phi) < 0.0001)
+            error("init_sig_u, init_sig_e", "unacceptable initial values supplied for variance" +
+                    " parameter or dispersion parameter of the random effects.  They need to exceed 0.0001.");
         }
         _state.setHGLMComputationState(beta, ubeta, psi, phi, hlcorrection, tau);
+        _parms._lambda = new double[]{0}; // disable elastic-net regularization
       } else {
         GLMGradientInfo ginfo = new GLMGradientSolver(_job, _parms, _dinfo, 0, _state.activeBC()).getGradient(beta);
         _lmax = lmax(ginfo._gradient);
@@ -628,6 +640,12 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     }
   }
   
+  public double restrictMag(double val) {
+    if (val < 0.0001)
+      return 0.1;
+    else
+      return val;
+  }
   private GLMModel runGLMModel(GLMParameters params, Family family) {
     GLMParameters tempParams = new GLMParameters();
     tempParams._train = params._train;
@@ -635,6 +653,11 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     tempParams._lambda = new double[]{0};
     tempParams._standardize = params._standardize;
     tempParams._response_column = params._response_column;
+    String[] ignored_columns = new String[params._ignored_columns.length];
+    for (int index=0; index<params._ignored_columns.length; index++) {
+      ignored_columns[index] = params._ignored_columns[index];
+    }
+    tempParams._ignored_columns = ignored_columns;
     GLMModel model = new GLM(tempParams).trainModel().get();
     return model;
   }
