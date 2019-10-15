@@ -801,6 +801,10 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         _state.updateState(beta, _state.gslvr().getGradient(beta));  // only calculate _gradient here when needed
       }
     }
+    
+    private void fitHGLM() {
+      
+    }
 
     private void fitIRLSM_multinomial(Solver s) {
       assert _dinfo._responses == 3 : "IRLSM for multinomial needs extra information encoded in additional reponses, expected 3 response vecs, got " + _dinfo._responses;
@@ -1190,31 +1194,35 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     }
     private void fitModel() {
       Solver solver = (_parms._solver == Solver.AUTO) ? defaultSolver() : _parms._solver;
-      switch (solver) {
-        case COORDINATE_DESCENT: // fall through to IRLSM
-        case IRLSM:
-          if(_parms._family == Family.multinomial)
-            fitIRLSM_multinomial(solver);
-          else if (_parms._family == Family.ordinal)
-            fitIRLSM_ordinal_default(solver);
-          else if(_parms._family == Family.gaussian && _parms._link == Link.identity)
-            fitLSM(solver);
-          else
-            fitIRLSM(solver);
-          break;
-        case GRADIENT_DESCENT_LH:
-        case GRADIENT_DESCENT_SQERR:
-          if (_parms._family.equals(Family.ordinal))
-            fitIRLSM_ordinal_default(solver);
-          break;
-        case L_BFGS:
-          fitLBFGS();
-          break;
-        case COORDINATE_DESCENT_NAIVE:
-          fitCOD();
-          break;
-        default:
-          throw H2O.unimpl();
+      if (_parms._HGLM) {
+        fitHGLM();
+      } else {
+        switch (solver) {
+          case COORDINATE_DESCENT: // fall through to IRLSM
+          case IRLSM:
+            if (_parms._family == Family.multinomial)
+              fitIRLSM_multinomial(solver);
+            else if (_parms._family == Family.ordinal)
+              fitIRLSM_ordinal_default(solver);
+            else if (_parms._family == Family.gaussian && _parms._link == Link.identity)
+              fitLSM(solver);
+            else
+              fitIRLSM(solver);
+            break;
+          case GRADIENT_DESCENT_LH:
+          case GRADIENT_DESCENT_SQERR:
+            if (_parms._family.equals(Family.ordinal))
+              fitIRLSM_ordinal_default(solver);
+            break;
+          case L_BFGS:
+            fitLBFGS();
+            break;
+          case COORDINATE_DESCENT_NAIVE:
+            fitCOD();
+            break;
+          default:
+            throw H2O.unimpl();
+        }
       }
       if(_parms._compute_p_values) { // compute p-values
         double se = 1;
