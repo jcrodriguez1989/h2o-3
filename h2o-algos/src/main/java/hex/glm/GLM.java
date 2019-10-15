@@ -1357,7 +1357,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         _workPerIteration = 1 + (WORK_TOTAL/_parms._max_iterations);
 
       if((_parms._family == Family.multinomial || _parms._family == Family.ordinal) && _parms._solver != Solver.L_BFGS ) {
-        double [] nb = getNullBeta();
+        double[] nb = getNullBeta();
         double maxRow = ArrayUtils.maxValue(nb);
         double sumExp = 0;
         if (_parms._family == Family.multinomial) {
@@ -1376,6 +1376,19 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
           _dinfo.addResponse(new String[]{"__glm_ExpC", "__glm_ExpNPC"}, vecs); // store eta for class C and class C-1
         else
           _dinfo.addResponse(new String[]{"__glm_sumExp", "__glm_maxRow"}, vecs);
+      }
+      
+      if (_parms._HGLM) { // will add w and random columns to response for easy access
+        int moreColnum = 1 + _parms._random_columns.length;
+        Vec[] vecs = _dinfo._adaptedFrame.anyVec().makeZeros(moreColnum);
+        String[] colNames = new String[moreColnum];
+        colNames[0] = "wData";  // store weight w for data rows only
+        String[] randColNames = _parms.train().names();
+        for (int index=1; index < moreColnum; index++) {
+            colNames[index] = randColNames[index-1];
+            vecs[index] = _parms.train().vec(_parms._random_columns[index-1]).makeCopy();
+        }
+        _dinfo.addResponse(colNames, vecs);
       }
       
       double oldDevTrain = _nullDevTrain;
