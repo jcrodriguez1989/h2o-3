@@ -87,6 +87,9 @@ public final class ComputationState {
       return betaMultinomial(_activeClass,_beta);
     return _beta;
   }
+  public double[] ubeta(){
+    return _ubeta;  // could be null.  Be careful
+  }
   public GLMGradientInfo ginfo(){return _ginfo == null?(_ginfo = gslvr().getGradient(beta())):_ginfo;}
   public BetaConstraint activeBC(){return _activeBC;}
   public double likelihood() {return _likelihood;}
@@ -546,19 +549,18 @@ public final class ComputationState {
 
   protected void setHGLMComputationState(double [] beta, double[] ubeta, double[] psi, double[] phi, 
                                          double hlcorrection, double tau){
-    copyArray(beta, _beta);
-    copyArray(ubeta, _ubeta);
-    copyArray(psi, _psi);
-    copyArray(phi, _phi);
+    _beta = copyArray(beta, _beta);
+    _ubeta = copyArray(ubeta, _ubeta);
+    _psi = copyArray(psi, _psi);
+    _phi = copyArray(phi, _phi);
     _correction_HL = hlcorrection;
     _tau = tau;
   }
   
   private double[] copyArray(double[] source, double[] dest) {
     if (dest==null)
-      dest = source.clone();
-    else 
-      System.arraycopy(source, 0, dest, 0, dest.length);
+      dest = new double[source.length];
+    System.arraycopy(source, 0, dest, 0, dest.length);
     return dest;
   }
 

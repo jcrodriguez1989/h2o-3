@@ -556,7 +556,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         if (_parms._startval==null) {
           GLMModel tempModel = runGLMModel(_parms, Family.gaussian);
           ModelMetrics mm = tempModel._output._training_metrics;
-
+          System.arraycopy(tempModel.beta(), 0, beta, 0, beta.length);
           hex.ModelMetricsRegressionGLM tMetric =  (hex.ModelMetricsRegressionGLM) tempModel._output._training_metrics;
           double init_sig_e = 0.6*tMetric.residual_deviance()/tMetric.residual_degrees_of_freedom();
           double init_sig_u = init_sig_e*0.66;
@@ -803,7 +803,12 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     }
     
     private void fitHGLM() {
-      
+      // initialize AugXZ frame.
+      Vec tempVec = Vec.makeZero(_dinfo._adaptedFrame.numRows()+ArrayUtils.sum(_randC));
+      Frame AugXZ = new Frame(tempVec.makeZeros(_state.beta().length-1+_state.ubeta().length));
+      // calculate wdata and write it back to response wdata
+      // calculate wrand and write it back to AugXZ
+
     }
 
     private void fitIRLSM_multinomial(Solver s) {
@@ -1293,7 +1298,8 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
         _model.addSubmodel(sm = new Submodel(lambda,getNullBeta(),_state._iter,_nullDevTrain,_nullDevTest));
       else {
         _model.addSubmodel(sm = new Submodel(lambda, _state.beta(),_state._iter,-1,-1));
-        _state.setLambda(lambda);
+        if (!_parms._HGLM) // only perform this when HGLM is not used.
+          _state.setLambda(lambda);
         checkMemoryFootPrint(_state.activeData());
         do {
           if (_parms._family == Family.multinomial || _parms._family == Family.ordinal)
