@@ -806,8 +806,7 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
       // initialize AugXZ frame.
       Vec tempVec = Vec.makeZero(_dinfo._adaptedFrame.numRows()+ArrayUtils.sum(_randC));
       Frame AugXZ = new Frame(tempVec.makeZeros(_state.beta().length-1+_state.ubeta().length));
-      // calculate wdata and write it back to response wdata
-      // calculate wrand and write it back to AugXZ
+      // calculate wdata, wrand, w*X and w*Z into AugXZ
 
     }
 

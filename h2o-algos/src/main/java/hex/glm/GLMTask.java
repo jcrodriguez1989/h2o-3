@@ -1648,6 +1648,32 @@ public abstract class GLMTask  {
   }
 */
 
+  public static class CalculateAugXZ extends MRTask<CalculateAugXZ> {
+    public ComputationState _currState;
+    public DataInfo _dinfo; // contains X and Z in response
+
+    public  CalculateAugXZ(ComputationState cState, DataInfo dInfo) { // pass it norm mul and norm sup - in the weights already done. norm
+      _currState = cState;
+      _dinfo = dInfo;
+    }
+
+    @Override
+    public void map(Chunk [] chunks) {
+      for (int i = 0; i < chunks[0]._len; ++i) { // going over all the rows in the chunk
+        double betanew = 0; // most recently updated prev variable
+        double betaold = 0; // old value of current variable being updated
+
+        
+      }
+
+    }
+  }
+ 
+ 
+ 
+ 
+ 
+ 
   public static class GLMCoordinateDescentTaskSeqNaive extends MRTask<GLMCoordinateDescentTaskSeqNaive> {
     public double [] _normMulold;
     public double [] _normSubold;
