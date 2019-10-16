@@ -41,7 +41,7 @@ public final class ComputationState {
   private double[] _beta; // vector of coefficients corresponding to active data
   private double[] _ubeta;  // HGLM, store coefficients of random effects;
   private double[] _psi; // HGLM, psi
-  private double[] _phi; // HGLM
+  private double[] _phi; // HGLM, size random columns levels
   private double _tau; // HGLM for ei
   private double _correction_HL; // HGLM
   final DataInfo _dinfo;

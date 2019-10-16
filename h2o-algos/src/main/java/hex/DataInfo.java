@@ -929,6 +929,16 @@ public class DataInfo extends Keyed<DataInfo> {
 
       return res;
     }
+    public double[] scalarProduct(double w, double[] rowContent, int catOffsets) { // multiple a row with scaler w
+      for (int i = 0; i < nBins; ++i) {
+        rowContent[binIds[i]] = w;  // value is absolute
+      }
+
+      for (int i = 0; i < numVals.length; ++i)
+        rowContent[i+catOffsets] += numVals[i]*w;
+
+      return rowContent;
+    }
     public final double twoNormSq() {
       assert !_intercept;
       assert numIds == null;

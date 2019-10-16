@@ -13,6 +13,7 @@ import water.*;
 import water.H2O.H2OCountedCompleter;
 import water.fvec.C0DChunk;
 import water.fvec.Chunk;
+import water.fvec.Frame;
 import water.util.ArrayUtils;
 import water.util.FrameUtils;
 import water.util.MathUtils;
@@ -1649,23 +1650,100 @@ public abstract class GLMTask  {
 */
 
   public static class CalculateAugXZ extends MRTask<CalculateAugXZ> {
-    public ComputationState _currState;
+    GLMParameters _parms;
     public DataInfo _dinfo; // contains X and Z in response
+    public int _prior_weightID;
+    public int _offsetID;
+    public int[] _random_columnsID;
+    public int[] _randCatLevels;  // categorical levels for random columns
+    public int _responseID;
+    public int _dataColNumber;
+    public int _randColNumber;
+    public int _numColStart;
+    Job _job;
+    Frame _AugXZ;
 
-    public  CalculateAugXZ(ComputationState cState, DataInfo dInfo) { // pass it norm mul and norm sup - in the weights already done. norm
-      _currState = cState;
+    public  CalculateAugXZ(Job job, DataInfo dInfo, GLMParameters params, Frame augxz, int[] randCatLevels) { // pass it norm mul and norm sup - in the weights already done. norm
+      _job = job;
       _dinfo = dInfo;
+      _parms = params;
+      _prior_weightID = _dinfo._weights?_dinfo.weightChunkId():-1;
+      _responseID = _dinfo.responseChunkId(0);
+      _offsetID = _dinfo._offset?_dinfo.offsetChunkId():-1;
+      _AugXZ = augxz;
+      _dataColNumber = _dinfo.fullN();
+      _numColStart = _dinfo.numCats()==0?0:_dinfo._catOffsets[_dinfo.numCats()];
+      int numRandCol = _parms._random_columns.length;
+      _randColNumber = numRandCol-_dataColNumber;
+      _random_columnsID = new int[numRandCol];
+      System.arraycopy(_parms._random_columns, 0, _random_columnsID, 0, numRandCol);
+      _randCatLevels = new int[numRandCol];
+      System.arraycopy(randCatLevels, 0, _randCatLevels, 0, numRandCol);
     }
 
     @Override
     public void map(Chunk [] chunks) {
+      long chkStartIdx = chunks[0].start(); // first row of chunks
+      int numColAugXZ = _AugXZ.numCols();
+      Chunk[] augXZChunks = new Chunk[numColAugXZ];
+      int augXZcurrIdx = getCorrectChunk(_AugXZ, 0, chkStartIdx, augXZChunks);
+      int augXZRowStart = (int)(chkStartIdx-augXZChunks[0].start());
+      int augXZRowNumber = augXZChunks[0].len();  // number of rows in _AugXZ
+
+      double[] processedRow = new double[numColAugXZ];
+      Row row = _dinfo.newDenseRow();
       for (int i = 0; i < chunks[0]._len; ++i) { // going over all the rows in the chunk
-        double betanew = 0; // most recently updated prev variable
-        double betaold = 0; // old value of current variable being updated
-
-        
+        _dinfo.extractDenseRow(chunks, i, row);
+        if (!row.isBad() && row.weight != 0) {
+          int augRelRow = i+augXZRowStart;
+          if (augRelRow >= augXZRowNumber) {  // need to grab a new chunk
+            chkStartIdx = i+chkStartIdx;
+            augXZcurrIdx = getCorrectChunk(_AugXZ, 1+augXZcurrIdx,chkStartIdx, augXZChunks);
+            augXZRowStart = (int) (chkStartIdx - augXZChunks[0].start());
+            augXZRowNumber = augXZChunks[0].len();
+            augRelRow = i+augXZRowStart;
+          }
+          Arrays.fill(processedRow, 0.0);
+          row.scalarProduct(row.weight, processedRow, _numColStart); // generate w*X
+          // assign the rows to the AugXZ
+          for (int colIndex=0; colIndex<_dataColNumber; colIndex++) {
+            augXZChunks[colIndex].set(augRelRow, processedRow[colIndex]);
+          }
+          // generate w*Z and assign to rows of AugXZ
+          int offset = _dataColNumber;
+          for (int randColIndex=0; randColIndex < _randColNumber; randColIndex++) {
+            int processRowIdx = offset + (int)row.response[1+randColIndex];
+            processedRow[processRowIdx] = row.weight;
+            offset += _randCatLevels[randColIndex];
+          }
+        }
       }
-
+    }
+    
+    public static int getCorrectChunk(Frame augXZ, int chkIdx, long currentRowAbs, Chunk[] chks) {
+      int currentIdx = chkIdx;
+      
+      while (currentIdx >= 0) {
+        currentIdx = getOneChunk(augXZ, currentIdx, currentRowAbs, chks);
+      }
+      return chkIdx;
+    }
+    
+    public static int getOneChunk(Frame augXZ, int chkIdx, long currentRowAbs, Chunk[] chks) {
+      int chkWidth = chks.length;
+      for (int j=0; j < chkWidth; j++) {
+        chks[j] = augXZ.vec(j).chunkForChunkIdx(chkIdx);
+      }
+      
+      // find correct row offset into chunk.
+      long strow = chks[0].start();
+      long endrow = chks[0].len()+strow;
+      if ((currentRowAbs >= strow) && (currentRowAbs< endrow))
+        return -1;
+      else if (currentRowAbs < strow)
+        return (chkIdx-1);
+      else
+        return (chkIdx+1);
     }
   }
  

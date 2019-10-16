@@ -803,10 +803,20 @@ public class GLM extends ModelBuilder<GLMModel,GLMParameters,GLMOutput> {
     }
     
     private void fitHGLM() {
+      // figure out random columns categorical levels
+      int numRandCols = _parms._random_columns.length;
+      int[] randCatLevels = new int[numRandCols];
+      int trainFrameColNum = _dinfo._adaptedFrame.numCols();
+      for (int index=0; index < numRandCols; index++) {
+        int colNum = trainFrameColNum-numRandCols+index;
+        randCatLevels[index] = _dinfo._adaptedFrame.vec(colNum).cardinality();
+      }
       // initialize AugXZ frame.
       Vec tempVec = Vec.makeZero(_dinfo._adaptedFrame.numRows()+ArrayUtils.sum(_randC));
       Frame AugXZ = new Frame(tempVec.makeZeros(_state.beta().length-1+_state.ubeta().length));
       // calculate wdata, wrand, w*X and w*Z into AugXZ
+      CalculateAugXZ augXZ = new CalculateAugXZ(_job, _dinfo, _parms, AugXZ, randCatLevels); // calculate wdata part
+      augXZ.doAll(_dinfo._adaptedFrame);
 
     }
 
