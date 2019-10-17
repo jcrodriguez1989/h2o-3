@@ -124,7 +124,7 @@ public class FVecParseWriter extends Iced implements StreamParseWriter {
       _nvs[i] = null; // free immediately, don't wait for all columns to close
     }
     if (_monitor != null) {
-      _monitor.update(this, mem);
+      _monitor.closed(this, mem);
     }
     _nvs = null;  // Free for GC
     return this;

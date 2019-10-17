@@ -28,6 +28,8 @@ public class FrameSizeMonitor extends MrFun<FrameSizeMonitor> {
     private final Map<FVecParseWriter, Long> writers = new HashMap<>();
     private final long totalMemory = getTotalMemory();
 
+    private long committedMemory = 0;
+    
     public FrameSizeMonitor(Key<Job> jobKey) {
         this.jobKey = jobKey;
     }
@@ -122,12 +124,14 @@ public class FrameSizeMonitor extends MrFun<FrameSizeMonitor> {
     }
     
     private long getUsedMemory() {
-        long usedMemory = 0;
+        long usedMemory;
         synchronized (writers) {
+            usedMemory = committedMemory;
             for (Map.Entry<FVecParseWriter, Long> e : writers.entrySet()) {
                 FVecParseWriter writer = e.getKey();
-                if (writer.getNvs() != null) {
-                    writers.put(writer, getUsedMemory(writer));
+                NewChunk[] nvs = writer.getNvs();
+                if (nvs != null) {
+                    writers.put(writer, getUsedMemory(nvs));
                 }
                 usedMemory += e.getValue();
             }
@@ -135,9 +139,8 @@ public class FrameSizeMonitor extends MrFun<FrameSizeMonitor> {
         return usedMemory;
     }
 
-    private long getUsedMemory(FVecParseWriter writer) {
+    private long getUsedMemory(NewChunk[] nvs) {
         long usedMemory = 0;
-        NewChunk[] nvs = writer.getNvs();
         for (NewChunk nv : nvs) {
             if (nv != null) {
                 usedMemory += nv.byteSize();
@@ -170,9 +173,10 @@ public class FrameSizeMonitor extends MrFun<FrameSizeMonitor> {
         }
     }
     
-    public void update(FVecParseWriter writer, long mem) {
+    public void closed(FVecParseWriter writer, long mem) {
         synchronized (writers) {
-            writers.put(writer, mem);
+            writers.remove(writer);
+            committedMemory += mem;
         }
     }
 }
